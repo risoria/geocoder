@@ -1,0 +1,115 @@
+#_author_: rosaisoria
+#_gr_geocode_tool_
+
+#import pygeocodio
+import csv
+import json
+import requests
+from geocodio import GeocodioClient
+import pandas as pd
+import sys
+import pprint
+
+
+#reload(sys)
+#sys.setdefaultencoding('utf-8')
+
+
+#open file and save data to list
+client = GeocodioClient("INSERT_KEY_HERE")
+
+#open the csv to geocode and make a list of items
+with open("/Users/rsoria/Desktop/dummy_dataset.csv", "r") as f:
+    reader = csv.reader(f)
+    addresses = []
+    for row in reader:
+        addresses.append(row[1])
+
+#geocode addresses
+location = client.geocode(addresses)
+#print(location)
+
+
+#save resulting locations to json file
+with open("/Users/rsoria/Documents/training/geocoder/dummydata.json","w") as file:
+    json.dump(location, file)
+
+
+#load json in python
+with open('/Users/rsoria/Documents/training/geocoder/dummydata.json','r') as myjson:
+    data = json.load(myjson)
+    
+    #load pretty printer
+    pp = pprint.PrettyPrinter()
+    #this pretty prints the whole thing
+    niceJson = pp.pprint(data)
+
+    #this prints the whole result at index 1 
+    #allResults = pp.pprint(data[1]['results']
+                           
+   #the following are cols in the file
+    formatted_address = data[1]['input']['formatted_address']
+
+   
+    accuracy_score = pp.pprint(data[1]['results'][0]['accuracy'])
+    lat = data[1]['results'][0]['location']['lat']
+    long = data[1]['results'][0]['location']['lng']
+    
+    print(formatted_address)
+    print(accuracy_score)
+    print(lat)
+    print(long)
+    
+    
+    ----------------------------THESE ARE PREVIOUS ITERATIONS AND BITS THAT MIGHT STILL BE USED-----------------------------
+    #address1 = data[1]['input']['formatted_address']
+    #print(address1)
+    
+
+#prettyfy the json structure
+#pp = pprint.PrettyPrinter()
+#niceJson = pp.pprint(jsondata)
+
+#print(niceJson)
+
+
+#print(type(jsondata))
+
+
+
+
+
+
+
+
+
+
+
+
+
+##            writer = csv.writer(open('/Users/rsoria/Desktop/geocode_result1.csv','wb+'))
+##
+##            for item in json.loads(myjson.read()):
+##                writer.writerow(item)
+##            print("Your data has been geocoded, access your CSV here: " + '/Users/rsoria/Desktop/')
+##
+##print(jsondata)
+##f.close()
+
+##used pythons DictWriter to write a csv with the new cols
+
+##cols = csv.DictWriter(fieldnames=fieldnames, "city", "lat")
+##colu = []
+##for item in cols:
+##    writeheaders(item)
+##
+##    print(colu)
+
+##
+##
+##f = csv.writer(open('/Users/rsoria/Desktop/geocode_result1.csv','wb+'))
+##
+##
+##for item in jsondata:
+##    val = jsondata[3]
+##    print(val)
