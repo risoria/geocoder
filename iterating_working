@@ -16,7 +16,7 @@ import pprint
 
 
 #open file and save data to list
-client = GeocodioClient("1099d1915d05d4b511bd334311904db911b9d9a")
+client = GeocodioClient("ENTERKEY")
 
 #myPath = input("Enter the path to the sheet you want to geocode: ")
 #print("You entered: " + myPath)
