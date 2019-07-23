@@ -1,0 +1,90 @@
+#_author_: rosaisoria
+#_gr_geocode tool_
+
+#import pygeocodio
+import csv
+import json
+import requests
+from geocodio import GeocodioClient
+import pandas as pd
+import sys
+import pprint
+
+
+#reload(sys)
+#sys.setdefaultencoding('utf-8')
+
+
+#open file and save data to list
+client = GeocodioClient("1099d1915d05d4b511bd334311904db911b9d9a")
+
+#myPath = input("Enter the path to the sheet you want to geocode: ")
+#print("You entered: " + myPath)
+
+
+
+with open("/Users/rsoria/Desktop/dummy_dataset.csv", "r") as f:
+    reader = csv.reader(f)
+    addresses = []
+    for row in reader:
+        addresses.append(row[1])
+
+
+
+#geocode addresses
+location = client.geocode(addresses)
+#print(location)
+
+
+
+#save resulting locations to json
+with open("/Users/rsoria/Documents/training/geocoder/dummydata.json","w") as file:
+    json.dump(location, file)
+
+
+#load json
+with open('/Users/rsoria/Documents/training/geocoder/dummydata.json','r') as myjson:
+    data = json.load(myjson)
+    #load pretty printer
+    pp = pprint.PrettyPrinter()
+    #this pretty prints the whole thing
+    #niceJson = pp.pprint(data)
+
+    #this prints the whole result at index 1 
+    #allResults = pp.pprint(data[1]['results']
+
+    
+    
+                           
+    #the following are cols in the file
+    ##formatted_address = data[len(data)-1]['input']['formatted_address']
+
+   
+    
+
+    address1 = []
+    lat = []
+    long = []
+    
+    for i in range(1, len(data)):
+        address1 = data[i]['input']['formatted_address']
+        lat = data[i]['results'][0]['location']['lat']
+        long = data[i]['results'][0]['location']['lng']
+        accuracy_score = data[i]['results'][0]['accuracy']
+        print()
+        print(address1)
+        print(lat)
+        print(long)
+        print(accuracy_score)
+    
+    ##address1 = data[i]['input']['formatted_address']
+    addr =  data[2]['input']['formatted_address']
+    #print(address1)
+    #print(addr)
+
+
+
+
+
+
+
