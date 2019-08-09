@@ -1,0 +1,135 @@
+# -*- coding: utf-8 -*-
+#_author_: rosaisoria
+#_gr_geocode tool_
+
+#import pygeocodio
+import csv
+import json
+import requests
+from geocodio import GeocodioClient
+import pandas as pd
+import sys
+import pprint
+import psycopg2
+
+
+#open file and save data to list
+client = GeocodioClient("THISISMYAPIKEY")
+
+
+#make list of addresses
+with open("/Users/rsoria/Desktop/la_test_dataset.csv", "r", encoding = 'utf-8') as f:
+    reader = csv.reader(f)
+    addresses = []
+    for row in reader:
+        addresses.append(row[1])
+
+#geocode addresses
+location = client.geocode(addresses, fields = ['cd','stateleg','census'])
+
+
+#save resulting locations to json
+with open("/Users/rsoria/Documents/training/geocoder/dummydata.json","w") as file:
+    json.dump(location, file)
+
+
+#load json and print pretty json
+with open('/Users/rsoria/Documents/training/geocoder/dummydata.json','r') as myjson:
+    data = json.load(myjson)
+    #load pretty printer
+    pp = pprint.PrettyPrinter()
+    #this pretty prints the whole thing
+    #niceJson = pp.pprint(data)
+
+#---------------------COL BY COL LISTS----------------------#
+
+addr = []
+latitude = []
+longitude = []
+accu_score = []
+accu_type = []
+congress_dist = []
+place = []
+censusyr = []
+statelegis_house = []
+statelegis_senate = []
+
+for item in range(1, len(data)):
+    addr.append(data[item]['input']['formatted_address'])
+    latitude.append(data[item]['results'][0]['location']['lat'])
+    longitude.append(data[item]['results'][0]['location']['lng'])
+    accu_score.append(data[item]['results'][0]['accuracy'])
+    accu_type.append(data[item]['results'][0]['accuracy_type'])
+    congress_dist.append(data[item]['results'][0]['fields']['congressional_districts'][0]['district_number'])
+    place.append(data[item]['results'][0]['fields']['census']['place_fips'])
+    censusyr.append(data[item]['results'][0]['fields']['census']['census_year'])
+    #party.append(data[item]['results'][0]['fields']['congressional_districts'][0]['current_legislators'][0]['bio']['party'])
+    statelegis_house.append(data[item]['results'][0]['fields']['state_legislative_districts']['house']['district_number'])
+    statelegis_senate.append(data[item]['results'][0]['fields']['state_legislative_districts']['senate']['district_number'])
+
+#----------------------SET THE PREVIOUS LISTS AS COLUMN NAMES FOR DAFRAME----------------------#
+
+#this zips all the lists into a list of lists
+zipped_results = list(zip(addr, latitude, longitude, accu_score, accu_type, congress_dist, place, censusyr, statelegis_house, statelegis_senate))
+
+
+#turn the lists into pandas dataframes
+dfresults = pd.DataFrame(zipped_results, columns = ['address','latitude','longitude','accuracy_score','accuracy_type', 'congressional_district','place_fips','census_year', 'state_house_district','state_senate_dist'])
+dfresults.index.name='id'
+print(dfresults)
+
+#save dataframe to csv
+dfresults.to_csv('/Users/rsoria/Documents/training/geocoder/dummydata_geocoded.csv')
+
+    
+print('A new csv file holding the results has been created. Find \'dummydata_geocoded.csv\'  at: /Users/rsoria/Documents/training/geocoder/')
+
+
+#--------------------PUSH NEW CSV TO POSTGRES DB FOR ANALYSIS--------------------------------#
+#connect to the database
+def push_geocoded():
+    conn = None
+    try:
+        conn = psycopg2.connect("dbname='pywicket' user='postgres' password='MapperMaker14'")
+    
+        print("Connected to the database, attempting to push data ...")
+        
+
+
+        #read data you want to push
+        mygeofile = open('/Users/rsoria/Documents/training/geocoder/dummydata_geocoded.csv', 'r')
+        
+        #make this new empty table
+        table = 'andanotherone'
+        with conn.cursor() as cur:
+            cur.execute("""CREATE TABLE andanotherone(
+            id integer PRIMARY KEY,
+            address varchar,
+            latitude float,
+            longitude float,
+            accuracy_score float,
+            accuracy_type varchar,
+            congress_dist integer,
+            place_fips integer,
+            census_year integer,
+            state_house_dist integer,
+            state_Senate_dost integer)""")
+            conn.commit()
+            cur.close()
+            conn.close()
+        print("we think this worked.")
+
+ 
+    except:
+        print("There's been an error")
+    finally:
+        if conn is not None:
+            conn.close()
+push_geocoded()
+              
+
+
+
+
+
+
