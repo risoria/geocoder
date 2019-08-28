@@ -90,7 +90,7 @@ print('A new csv file holding the results has been created. Find \'dummydata_geo
 def push_geocoded():
     conn = None
     try:
-        conn = psycopg2.connect("dbname='pywicket' user='postgres' password='MapperMaker14'")
+        conn = psycopg2.connect("dbname='pywicket' user='postgres' password='THISPS'")
     
         print("Connected to the database, attempting to push data ...")
     
