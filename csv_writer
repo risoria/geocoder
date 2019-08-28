@@ -1,0 +1,117 @@
+#_author_: rosaisoria
+#_gr_geocode tool_
+
+#import pygeocodio
+import csv
+import json
+import requests
+from geocodio import GeocodioClient
+import pandas as pd
+import sys
+import pprint
+
+
+#reload(sys)
+#sys.setdefaultencoding('utf-8')
+
+
+#open file and save data to list
+client = GeocodioClient("APICODEHERE")
+
+#myPath = input("Enter the path to the sheet you want to geocode: ")
+#print("You entered: " + myPath)
+
+
+
+with open("/Users/rsoria/Desktop/dummy_dataset.csv", "r") as f:
+    reader = csv.reader(f)
+    addresses = []
+    for row in reader:
+        addresses.append(row[1])
+
+
+
+#geocode addresses
+location = client.geocode(addresses)
+#print(location)
+
+
+
+#save resulting locations to json
+with open("/Users/rsoria/Documents/training/geocoder/dummydata.json","w") as file:
+    json.dump(location, file)
+
+
+#load json
+with open('/Users/rsoria/Documents/training/geocoder/dummydata.json','r') as myjson:
+    data = json.load(myjson)
+    #load pretty printer
+    pp = pprint.PrettyPrinter()
+    #this pretty prints the whole thing
+    #niceJson = pp.pprint(data)
+
+    #this prints the whole result at index 1 
+    #allResults = pp.pprint(data[1]['results']
+
+    
+    
+                           
+    #the following are cols in the file
+    ##formatted_address = data[len(data)-1]['input']['formatted_address']
+
+   
+    
+#---------INDIVIDUAL ADDRESS BY ADDRESS CHUNKS-------------#
+    
+##    for i in range(1, len(data)):
+##        address1 = data[i]['input']['formatted_address']
+##        lat = data[i]['results'][0]['location']['lat']
+##        long = data[i]['results'][0]['location']['lng']
+##        accuracy_score = data[i]['results'][0]['accuracy']
+##        accuracy_type = data[i]['results'][0]['accuracy_type']
+##        print()
+##        print(address1)
+##        print(lat)
+##        print(long)
+##        print(accuracy_score)
+##        print(accuracy_type)
+    
+#---------------------COL BY COL LISTS----------------------#
+
+addr = []
+latitude = []
+longitude = []
+accu_score = []
+accu_type = []
+
+for item in range(1, len(data)):
+    addr.append(data[item]['input']['formatted_address'])
+    latitude.append(data[item]['results'][0]['location']['lat'])
+    longitude.append(data[item]['results'][0]['location']['lng'])
+    accu_score.append(data[item]['results'][0]['accuracy'])
+    accu_type.append(data[item]['results'][0]['accuracy_type'])
+print('The geocoding yielded the following: ')
+print()
+print(addr)
+print(latitude)
+print(longitude)
+print(accu_score)
+print(accu_type)
+
+all_result_cols = [addr, latitude, longitude, accu_score, accu_type]
+
+
+#write the resulting lists to a csv file
+with open('/Users/rsoria/Documents/training/geocoder/dummydata_geocoded.csv', 'w') as csvfile:
+    write = csv.writer(csvfile)
+    write.writerows(row for row in all_result_cols)
+   # write.writerows([row] for row in latitude)
+    
+print('A new csv file holding the results has been created. Find \'dummydata_geocoded.csv\'  at: /Users/rsoria/Documents/training/geocoder/')
+    
+    
+    
+
+
+
+
