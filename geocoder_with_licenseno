@@ -1,0 +1,226 @@
+# -*- coding: utf-8 -*-
+#_author_: rosaisoria
+#_gr_geocode tool_
+
+#import pygeocodio
+import csv
+import json
+import requests
+from geocodio import GeocodioClient
+import pandas as pd
+import sys
+import pprint
+import psycopg2
+
+
+#open file and save data to list
+client = GeocodioClient("THISAPI")
+
+
+#make list of addresses
+with open("/Users/rsoria/Documents/projects/GR/usa/california/06_licenses_db/ca_licenses_geocode/ca_october_licenses.csv", "r", encoding = 'utf-8') as f:
+    reader = csv.reader(f)
+    addresses = []
+    lic = []
+    for row in reader:
+        addresses.append(row[1])
+        lic.append(row[0])
+
+#geocode addresses
+location = client.geocode(addresses, fields = ['cd','stateleg','census'])
+#print(location)
+
+
+
+#save resulting locations to json
+with open("/Users/rsoria/Documents/training/geocoder/dummydata_withlicense.json","w") as file:
+    json.dump(location, file)
+
+
+#load json and print pretty json
+with open('/Users/rsoria/Documents/training/geocoder/dummydata_withlicense.json','r') as myjson:
+    data = json.load(myjson)
+    #load pretty printer
+    pp = pprint.PrettyPrinter()
+    #this pretty prints the whole thing
+    #niceJson = pp.pprint(data)
+
+#---------------------COL BY COL LISTS----------------------#
+
+addr = []
+latitude = []
+longitude = []
+accu_score = []
+accu_type = []
+congress_dist = []
+place = []
+censusyr = []
+statelegis_house = []
+statelegis_senate = []
+
+for item in range(1, len(data)):
+    addr.append(data[item]['input']['formatted_address'])
+    latitude.append(data[item]['results'][0]['location']['lat'])
+    longitude.append(data[item]['results'][0]['location']['lng'])
+    accu_score.append(data[item]['results'][0]['accuracy'])
+    accu_type.append(data[item]['results'][0]['accuracy_type'])
+    congress_dist.append(data[item]['results'][0]['fields']['congressional_districts'][0]['district_number'])
+    place.append(data[item]['results'][0]['fields']['census']['place_fips'])
+    censusyr.append(data[item]['results'][0]['fields']['census']['census_year'])
+    #party.append(data[item]['results'][0]['fields']['congressional_districts'][0]['current_legislators'][0]['bio']['party'])
+    statelegis_house.append(data[item]['results'][0]['fields']['state_legislative_districts']['house']['district_number'])
+    statelegis_senate.append(data[item]['results'][0]['fields']['state_legislative_districts']['senate']['district_number'])
+
+#----------------------SET THE PREVIOUS LISTS AS COLUMN NAMES FOR DAFRAME----------------------#
+
+#this zips all the lists into a list of lists
+zipped_results = list(zip(lic, addr, latitude, longitude, accu_score, accu_type, congress_dist, place, censusyr, statelegis_house, statelegis_senate))
+
+
+#turn the lists into pandas dataframes
+dfresults = pd.DataFrame(zipped_results, columns = ['license_record','address','latitude','longitude','accuracy_score','accuracy_type', 'congressional_district','place_fips','census_year', 'state_house_dist','state_senate_dist'])
+dfresults.index.name='id'
+print(dfresults)
+
+#save dataframe to csv
+dfresults.to_csv('/Users/rsoria/Documents/projects/GR/usa/california/06_licenses_db/ca_licenses_geocode/ca_october_licenses_geocoded.csv')
+
+    
+print('A new csv file holding the results has been created. Find \'ca_october_licenses_geocoded.csv\'  at: /Users/rsoria/Documents/projects/GR/usa/california/06_licenses_db/ca_licenses_geocode/')
+
+
+#--------------------PUSH NEW CSV TO POSTGRES DB FOR ANALYSIS--------------------------------#
+#connect to the database
+def push_geocoded():
+    conn = None
+    try:
+        conn = psycopg2.connect("dbname='THIDB' user='THISUSER' password='THISPW'")
+    
+        print("Connected to the database, attempting to push data ...")
+    
+
+        #make this new empty table
+        table = 'atab'
+        with conn.cursor() as cur:
+            cur.execute("""CREATE TABLE atab(
+            id integer PRIMARY KEY,
+            license_record varchar,
+            address varchar,
+            latitude float,
+            longitude float,
+            accuracy_score float,
+            accuracy_type varchar,
+            congress_dist integer,
+            place_fips integer,
+            census_year integer,
+            state_house_dist integer,
+            state_senate_dist integer)""")
+            conn.commit()
+            print("Table created successfully.")
+
+
+            
+            
+            #populate the empty table with csv contents
+            copy_sql = """
+                    copy atab from stdin with
+                    csv
+                    header
+                    delimiter ','
+                """
+            from_csv = '/Users/rsoria/Documents/projects/GR/usa/california/06_licenses_db/ca_licenses_geocode/ca_october_licenses_geocoded.csv'
+            with open(from_csv, 'r') as f:
+                cur.copy_expert(sql=copy_sql, file=f)          
+                conn.commit()
+
+            print(table + " has been populated.")
+
+            #add geometry column and make points from lat/long
+            sql_addgeom = "SELECT  AddGeometryColumn('public','atab','geom', 4326,'POINT',2)"
+            sql_makept = 'UPDATE atab SET geom=ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)'
+            cur.execute(sql_addgeom)
+            conn.commit()
+            cur.execute(sql_makept)
+            conn.commit()
+            print("Geom was created")
+
+            #check if points fall inside geoms
+            sql_checkwithins = "SELECT a.id, a.address, a.latitude, a.longitude, a.accuracy_score, a.accuracy_type, a.congress_dist,a.place_fips, a.census_year, a.state_house_dist, a.state_senate_dist, a.geom,b.city_state, left(city_state, -4) as city, right(city_state, 2) as state into atab_child FROM atab a JOIN usa_city b ON st_within(a.geom, b.geom);"
+            cur.execute(sql_checkwithins)
+            conn.commit()
+            print("Cities have been tagged.")
+            print("Running distance calculations...")
+
+            #run a distance matrix
+            sql_distance = """
+            with add_class as (
+                select 
+                a.*,
+                case when a.address ~ '^[0-9]+' then 'street level'
+                         when a.address !~ '^[0-9]+' then 'zipcode only level'
+                end as address_classification
+                from atab_child a),
+	
+            dist_calcs as(
+            select
+                    a.id id1, 
+                    b.id id2,
+                    a.accuracy_score,
+                    a.address address_1,
+                    b.address address_2,
+                    case when a.address_classification = 'street level' then (st_distance(st_transform(a.geom, 5070),st_transform(b.geom, 5070))) / 0.3048
+                    end as dist_feet
+                    
+            -- into atab_distmatrix
+            FROM add_class as a 
+            JOIN add_class as b 
+            ON a.id <> b.id),
+	
+        colocated_dupes as (
+        select 
+                id1,
+                id2,
+                accuracy_score, 
+                address_1, 
+                address_2,
+                dist_feet,
+                case when dist_feet <= 5 and accuracy_score > 0.67 then 'potentially co-located' 
+                         when dist_feet > 5 then 'single license business'		
+                else 'relationship undeterminable, one address has zipcode level accuracy'
+                end as colocation_status
+        from dist_calcs
+        group by 1,2,3,4,5,6)
+																		  
+        select 
+                distinct(address_1)
+        into atab_colocated
+        from colocated_dupes 
+        where colocation_status = 'potentially co-located'		 
+            """
+            cur.execute(sql_distance)
+            conn.commit()
+  
+
+
+
+
+
+            cur.close()
+            
+
+            
+
+
+
+ 
+    except:
+        print("There's been an error")
+    finally:
+        if conn is not None:
+            conn.close()
+push_geocoded()
+              
+
+
+
+
